@@ -2,6 +2,8 @@
 
 GPIO based Linux socket kernel module
 
+![thumbnail](docs/blueprint.jpg)
+
 # what is this?
 
 This kernel module is no different from a plain old Linux networking interface...\
@@ -90,11 +92,11 @@ Linux raspberrypi 6.12.25+rpt-rpi-v8 #1 SMP PREEMPT Debian 1:6.12.25-1+rpt1 (202
 
 - blueprint
 
-[blueprint](docs/blueprint.jpg)
+![blueprint](docs/blueprint.jpg)
 
 - actual
 
-[actual](docs/actual.jpg)
+![actual](docs/actual.jpg)
 
 2. build
 
