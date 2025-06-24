@@ -1,3 +1,18 @@
+# DEV MODE:
+#   if you set only either (CTLOUT, DATAOUT) or (CTLIN, DATAIN)
+#   you're running this module in a dev mode 
+#   for checking connectivity between two pis.
+#   by setting either pair to =0, you can enter this mode.
+#   obviously, if you set (CTLOUT, DATAOUT) on pi1, you should set (CTLIN, DATAIN) on pi2. 
+#   another one to remember is to run (CTLIN, DATAIN) first and then (CTLOUT, DATAOUT).
+#   use dmesg to find out the connectivity is okay.
+# PROD MODE:
+#   if you set all four (CTLOUT, DATAOUT, CTLIN, DATAIN)
+#   you're running this module in a prod mode 
+#   where two pis can talk to each other
+#   based on whatever upper layer networking protocol 
+#   including TCP/IP
+
 CTLOUT=GPIO24
 DATAOUT=GPIO27
 #CTLIN=0
