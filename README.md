@@ -85,6 +85,9 @@ Vendor ID:                ARM
 # uname -a
 Linux raspberrypi 6.12.25+rpt-rpi-v8 #1 SMP PREEMPT Debian 1:6.12.25-1+rpt1 (2025-04-30) aarch64 GNU/Linux
 ```
+# documentation
+
+- [version 1.0](https://medium.com/@seantywork/gpiosk-introducing-my-gpio-based-linux-socket-kernel-module-bba2d114236e)
 
 # how to
 
