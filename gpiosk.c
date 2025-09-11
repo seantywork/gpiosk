@@ -1,4 +1,4 @@
-#include "kgpio_irqsk.h"
+#include "gpiosk.h"
 
 
 struct net_device *geth_devs;
