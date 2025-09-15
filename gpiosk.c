@@ -83,42 +83,84 @@ int geth_poll(struct napi_struct *napi, int budget){
 	struct net_device *dev = priv->dev;
 	struct geth_packet pkt;
 	
+	void *orig_data, *orig_data_end;
+	struct bpf_prog *xdp_prog = priv->xdp_prog;
+	struct xdp_buff xdp_buff;
+	u32 frame_sz;
+	u32 act;
+	int off;
 	//spin_lock(&q_lock);
-
-	pkt.dev = dev;
-	pkt.datalen = i_q_len[i_q_ptr];
-	memcpy(pkt.data, i_q[i_q_ptr], pkt.datalen);
 
 	//spin_unlock(&q_lock);
 
     printk(KERN_INFO "polling\n");
 
-	while (npackets < budget && (i_q_ptr + 1)) {
+	xdp_set_return_frame_no_direct();
 
-		i_q_ptr -= 1;
+	pkt.dev = dev;
+	pkt.datalen = i_q_len[i_q_ptr];
+	memcpy(pkt.data, i_q[i_q_ptr], pkt.datalen);
 
-		skb = dev_alloc_skb(NET_IP_ALIGN + pkt.datalen);
-		if (! skb) {
-			if (printk_ratelimit()){
-                printk(KERN_INFO "geth: packet dropped\n");
-            }
-			priv->stats.rx_dropped++;
-			npackets++;
-			continue;
-		}
-		skb_reserve(skb, NET_IP_ALIGN);  
-		memcpy(skb_put(skb, pkt.datalen), pkt.data, pkt.datalen);
-		skb->dev = dev;
-		skb->protocol = eth_type_trans(skb, dev);
-		skb->ip_summed = CHECKSUM_UNNECESSARY;
-		netif_receive_skb(skb);
+	skb = dev_alloc_skb(NET_IP_ALIGN + pkt.datalen);
+	skb_reserve(skb, NET_IP_ALIGN);  
+	memcpy(skb_put(skb, pkt.datalen), pkt.data, pkt.datalen);
+	skb->dev = dev;
+	skb->protocol = eth_type_trans(skb, dev);
+	skb->ip_summed = CHECKSUM_UNNECESSARY;
 
-		npackets++;
-		priv->stats.rx_packets++;
-		priv->stats.rx_bytes += pkt.datalen;
+	if(unlikely(!xdp_prog)){
+		goto noxdpprog;
+	}
+	frame_sz = skb_end_pointer(skb) - skb->head;
+	frame_sz = SKB_DATA_ALIGN(sizeof(struct skb_shared_info));
+	xdp_init_buff(&xdp_buff, frame_sz, &priv->xdp_rxq);
+	xdp_prepare_buff(&xdp_buff, skb->head, skb_headroom(skb), skb_headlen(skb), true);
+	if (skb_is_nonlinear(skb)) {
+		skb_shinfo(skb)->xdp_frags_size = skb->data_len;
+		xdp_buff_set_frags_flag(&xdp_buff);
+	} else {
+		xdp_buff_clear_frags_flag(&xdp_buff);
 	}
 
-    printk(KERN_INFO "polling done\n");
+	orig_data = xdp_buff.data;
+	orig_data_end = xdp_buff.data_end;
+	act = bpf_prog_run_xdp(xdp_prog, &xdp_buff);
+	switch(act){
+		case XDP_PASS:
+			printk(KERN_INFO "geth: XDP_PASS\n");
+			break;
+		default:
+			printk(KERN_INFO "geth: XDP_DROP\n");
+			goto exit;
+	}
+	off = orig_data - xdp_buff.data;
+	if (off > 0)
+		__skb_push(skb, off);
+	else if (off < 0)
+		__skb_pull(skb, -off);
+
+	skb_reset_mac_header(skb);
+
+	off = xdp_buff.data_end - orig_data_end;
+	if (off != 0){
+		__skb_put(skb, off); 
+	}
+
+	if (xdp_buff_has_frags(&xdp_buff)){
+		skb->data_len = skb_shinfo(skb)->xdp_frags_size;
+	} else {
+		skb->data_len = 0;
+	}
+
+noxdpprog:
+
+	netif_receive_skb(skb);
+
+	npackets++;
+	priv->stats.rx_packets++;
+	priv->stats.rx_bytes += pkt.datalen;
+
+exit:
 
 	if (npackets < budget) {
         printk(KERN_INFO "npackets smaller than budget\n");
@@ -130,8 +172,9 @@ int geth_poll(struct napi_struct *napi, int budget){
 		spin_unlock_irqrestore(&priv->lock, flags);
 	}
 
-
     printk(KERN_INFO "polling end\n");
+	i_q_ptr -= 1;
+	xdp_clear_return_frame_no_direct();
 
 	return npackets;
 
@@ -322,6 +365,132 @@ void geth_tx_timeout(struct net_device *dev, unsigned int txqueue)
 	return;
 }
 
+/* XDP functions */
+
+
+
+static bool geth_gro_requested(const struct net_device *dev){
+	return !!(dev->wanted_features & NETIF_F_GRO);
+}
+
+static void geth_disable_xdp_range(struct net_device *dev, int start, int end, bool delete_napi){
+
+	struct geth_priv *priv = netdev_priv(dev);
+	int i;
+
+	for (i = start; i < end; i++) {
+		priv->xdp_rxq.mem = priv->xdp_mem;
+		xdp_rxq_info_unreg(&priv->xdp_rxq);
+
+		if (delete_napi)
+			netif_napi_del(&priv->napi);
+	}
+}
+
+static int geth_enable_xdp_range(struct net_device *dev, int start, int end, bool napi_already_on){
+
+	struct geth_priv *priv = netdev_priv(dev);
+	int err, i;
+
+	for (i = start; i < end; i++) {
+
+		if (!napi_already_on){
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,6,0)
+			netif_napi_add(dev, &priv->napi, geth_poll,2);
+#else 
+			netif_napi_add_weight(dev, &priv->napi, geth_poll,2);
+#endif
+		}
+		err = xdp_rxq_info_reg(&priv->xdp_rxq, dev, i, priv->napi.napi_id);
+		if (err < 0)
+			goto err_rxq_reg;
+
+		err = xdp_rxq_info_reg_mem_model(&priv->xdp_rxq, MEM_TYPE_PAGE_SHARED, NULL);
+		if (err < 0)
+			goto err_reg_mem;
+
+		/* Save original mem info as it can be overwritten */
+		priv->xdp_mem = priv->xdp_rxq.mem;
+	}
+	return 0;
+
+err_reg_mem:
+	xdp_rxq_info_unreg(&priv->xdp_rxq);
+err_rxq_reg:
+	for (i--; i >= start; i--) {
+		xdp_rxq_info_unreg(&priv->xdp_rxq);
+		if (!napi_already_on)
+			netif_napi_del(&priv->napi);
+	}
+
+	return err;
+}
+
+static int geth_enable_xdp(struct net_device *dev){
+
+	bool napi_already_on = geth_gro_requested(dev) && (dev->flags & IFF_UP);
+	struct geth_priv *priv = netdev_priv(dev);
+	int err, i;
+
+	if (!xdp_rxq_info_is_reg(&priv->xdp_rxq)) {
+		err = geth_enable_xdp_range(dev, 0, dev->real_num_rx_queues, napi_already_on);
+		if (err)
+			return err;
+
+	}
+
+	return 0;
+}
+
+static int geth_xdp_set(struct net_device *dev, struct bpf_prog *prog, struct netlink_ext_ack *extack){
+
+	struct geth_priv *priv = netdev_priv(dev);
+	struct bpf_prog *old_prog;
+	int err;
+
+	old_prog = priv->xdp_prog;
+	priv->xdp_prog = prog;
+
+	if (prog) {
+
+
+		if (dev->flags & IFF_UP) {
+			err = geth_enable_xdp(dev);
+			if (err) {
+				NL_SET_ERR_MSG_MOD(extack, "Setup for XDP failed");
+				goto err;
+			}
+		}
+
+		if (!old_prog) {
+			if (!geth_gro_requested(dev)) {
+
+				dev->features |= NETIF_F_GRO;
+				netdev_features_change(dev);
+			}
+		}
+
+	}
+	printk("geth: loaded xdp prog\n");
+
+	return 0;
+err:
+	priv->xdp_prog = old_prog;
+
+	return err;
+}
+
+static int geth_xdp(struct net_device *dev, struct netdev_bpf *xdp)
+{
+	switch (xdp->command) {
+	case XDP_SETUP_PROG:
+		return geth_xdp_set(dev, xdp->prog, xdp->extack);
+	default:
+		return -EINVAL;
+	}
+}
+
+/* XDP functions end */
 
 
 const struct net_device_ops geth_netdev_ops = {
@@ -329,6 +498,7 @@ const struct net_device_ops geth_netdev_ops = {
 	.ndo_stop            = geth_stop,
 	.ndo_start_xmit      = geth_xmit,
 	.ndo_tx_timeout      = geth_tx_timeout,
+	.ndo_bpf             = geth_xdp,
 };
 
 

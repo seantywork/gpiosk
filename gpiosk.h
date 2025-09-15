@@ -31,6 +31,11 @@
 #include <asm/atomic.h>
 #include <asm/checksum.h>
 
+
+#include <net/xdp.h>
+#include <linux/filter.h>
+
+
 #define DRV_NAME	"geth"
 
 #define GETH_TIMEOUT 5
@@ -43,6 +48,11 @@
 #define SYNC_UDELAY 64
 
 
+#define GETH_XDP_FLAG		BIT(0)
+#define GETH_XDP_HEADROOM	(XDP_PACKET_HEADROOM + NET_IP_ALIGN)
+
+#define GETH_XDP_TX_BULK_SIZE	16
+#define GETH_XDP_BATCH		16
 
 struct geth_packet {
 	struct geth_packet *next;
@@ -63,6 +73,9 @@ struct geth_priv {
     spinlock_t lock;
 	struct net_device *dev;
 	struct napi_struct napi;
+    struct bpf_prog *xdp_prog;
+    struct xdp_rxq_info xdp_rxq;
+    struct xdp_mem_info	xdp_mem;
 };
 
 
