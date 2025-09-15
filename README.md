@@ -55,6 +55,106 @@ bye
 
 ```
 
+# xdp native
+
+### build
+
+```shell
+cd xdp-prog
+
+./install.sh
+
+```
+
+### example: allowing tcp communication
+
+```shell
+# on rpi2
+$ cd xdp-prog
+$ sudo xdp-loader load -m native -s xdp_prog geth0 "xdp_pass.o"
+$ nc -l 10.10.0.2 9999
+
+# on rpi2, terminal 2
+sudo dmesg -wH
+
+```
+
+
+```shell
+# on rpi1
+$ nc 10.10.0.1 9999
+
+
+```
+
+```shell
+
+# on rpi2, terminal 2
+[  +0.000035] entered xmit
+[  +0.000004] entered hw tx
+[  +0.000003] eth src: 47:45:54:48:30:33
+[  +0.000005] eth dst: 47:45:54:48:30:36
+[  +0.000004] src: 0a0a0002:09999
+[  +0.000004] dst: 0a0a0001:37512
+[  +0.048151] exiting xmit
+[  +0.000006] npackets smaller than budget
+[  +0.000004] napi complete
+[  +0.000003] polling end
+[  +0.223525] napi interrupt
+[  +0.000010] napi receive
+[  +0.000002] napi interrupt end
+[  +0.000009] polling
+[  +0.000005] geth: XDP_PASS # <------- here you can see the traffic is allowed by the sample program
+
+```
+
+```shell
+# unload
+
+$ sudo xdp-loader unload geth0 -a
+
+```
+
+### example: blocking tcp communication
+
+```shell
+# on rpi2
+$ cd xdp-prog
+$ sudo xdp-loader load -m native -s xdp_prog geth0 "xdp_drop.o"
+$ nc -l 10.10.0.2 9999
+
+# on rpi2, terminal 2
+sudo dmesg -wH
+
+```
+
+
+```shell
+# on rpi1
+$ nc 10.10.0.1 9999
+
+
+```
+
+```shell
+
+# on rpi2, terminal 2
+[Sep15 01:48] napi interrupt
+[  +0.000013] napi receive
+[  +0.000003] napi interrupt end
+[  +0.000013] polling
+[  +0.000008] geth: XDP_DROP # <---------- here you can see the traffic is blocked by the sample program
+
+
+```
+
+```shell
+# unload
+
+$ sudo xdp-loader unload geth0 -a
+
+```
+
 # specification
 
 So far, I only tested it on my raspberry pi 4b with spec below
