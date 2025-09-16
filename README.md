@@ -37,7 +37,7 @@ except it uses GPIO to send and receive data
 
 ```
 
-### tcp communication using nc
+### example: tcp communication using nc
 ```shell
 # on rpi2
 $ nc -l 10.10.0.2 9999
@@ -57,12 +57,22 @@ bye
 
 # xdp native
 
-### build
+
+### install xdp-tools
 
 ```shell
 cd xdp-prog
 
 ./install.sh
+
+```
+
+### build sample xdp programs
+
+```shell
+cd xdp-prog
+
+make
 
 ```
 
