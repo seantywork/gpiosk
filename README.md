@@ -1,6 +1,6 @@
 # gpiosk
 
-GPIO based Linux socket kernel module
+GPIO based Linux netdevice kernel module
 
 ![thumbnail](docs/blueprint.jpg)
 
