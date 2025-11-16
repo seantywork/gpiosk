@@ -31,6 +31,8 @@
 #include <asm/atomic.h>
 #include <asm/checksum.h>
 
+#include <linux/gpio/driver.h>
+#include <linux/gpio/consumer.h>
 
 #include <net/xdp.h>
 #include <linux/filter.h>
@@ -47,6 +49,11 @@
 
 #define SYNC_UDELAY 64
 
+#define PINCTRL_BCM2711 "pinctrl-bcm2711"
+#define PIN_CTL_IN 17
+#define PIN_DATA_IN 27
+#define PIN_CTL_OUT 23
+#define PIN_DATA_OUT 24
 
 #define GETH_XDP_FLAG		BIT(0)
 #define GETH_XDP_HEADROOM	(XDP_PACKET_HEADROOM + NET_IP_ALIGN)

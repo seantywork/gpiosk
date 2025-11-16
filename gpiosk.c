@@ -12,15 +12,10 @@ int pool_size = 8;
 
 void (*geth_interrupt)(int, void *, struct pt_regs *);
 
-int gpio_ctl_o;
-int gpio_ctl_i;
-int gpio_data_o;
-int gpio_data_i;
-
-module_param(gpio_ctl_o, int, 0664);
-module_param(gpio_ctl_i, int, 0664);
-module_param(gpio_data_o, int, 0664);
-module_param(gpio_data_i, int, 0664);
+int gpio_ctl_o = -1;
+int gpio_ctl_i = -1;
+int gpio_data_o = -1;
+int gpio_data_i = -1;
 
 unsigned int gpio_ctl_i_irq;
 unsigned int gpio_data_i_irq;
@@ -667,228 +662,150 @@ irqreturn_t gpio_data_irq_handler(int irq, void *dev_id) {
 	return IRQ_HANDLED;
 }
 
-static DECLARE_WAIT_QUEUE_HEAD(this_wq);
-
-static int condition;
-
-static struct work_struct job;
-
-static void job_handler(struct work_struct* work){
-
-    printk(KERN_INFO "waitqueue handler: %s\n", __FUNCTION__);
-
-	printk(KERN_INFO "waitqueue handler waiting...\n");
-
-	msleep(100);
-
-	printk(KERN_INFO "sending ctl start preamble\n");
-
-	gpio_tx(o_value, MAX_PKTLEN);
-
-    condition = 1;
-
-    wake_up_interruptible(&this_wq);
-
-}
-
 
 static int __init ksock_gpio_init(void) {
 
 	int err;
 
-	if(gpio_ctl_o == 0 && gpio_ctl_i == 0){
-
-		printk("gpio irqsk: at least one ctl should be set\n");
+	if(gpio_request(gpio_ctl_o, "gpio-ctl-o")) {
+		printk("gpio irqsk: can't allocate gpio_ctl_o: %d\n", gpio_ctl_o);
 		return -1;
+	}		
 
+	if(gpio_direction_output(gpio_ctl_o, IRQF_TRIGGER_NONE)) {
+		printk("gpio irqsk: can't set gpio_ctl_o to output\n");
+		gpio_free(gpio_ctl_o);
+		return -1;
 	}
 
-	if(gpio_ctl_o != 0){
+	if(gpio_request(gpio_data_o, "gpio-data-o")) {
+		printk("gpio irqsk: can't allocate gpio_data_o: %d\n", gpio_data_o);
+		gpio_free(gpio_ctl_o);
+		return -1;
+	}		
 
-		if(gpio_data_o == 0){
-			printk("gpio irqsk: gpio_ctl_o should also set gpio_data_o\n");
-			return -1;
-		}
+	if(gpio_direction_output(gpio_data_o, IRQF_TRIGGER_NONE)) {
+		printk("gpio irqsk: can't set gpio_data_o to output\n");
+		gpio_free(gpio_ctl_o);
+		gpio_free(gpio_data_o);
+		return -1;
+	}
 
-		if(gpio_request(gpio_ctl_o, "gpio-ctl-o")) {
-			printk("gpio irqsk: can't allocate gpio_ctl_o: %d\n", gpio_ctl_o);
-			return -1;
-		}		
-
-		if(gpio_direction_output(gpio_ctl_o, IRQF_TRIGGER_NONE)) {
-			printk("gpio irqsk: can't set gpio_ctl_o to output\n");
-			gpio_free(gpio_ctl_o);
-			return -1;
-		}
-
-		if(gpio_request(gpio_data_o, "gpio-data-o")) {
-			printk("gpio irqsk: can't allocate gpio_data_o: %d\n", gpio_data_o);
-			gpio_free(gpio_ctl_o);
-			return -1;
-		}		
-
-		if(gpio_direction_output(gpio_data_o, IRQF_TRIGGER_NONE)) {
-			printk("gpio irqsk: can't set gpio_data_o to output\n");
+	if(gpio_data_i == 0){
+		printk("gpio irqsk: gpio_ctl_i should also set gpio_data_i\n");
+		if(gpio_ctl_o != 0){
 			gpio_free(gpio_ctl_o);
 			gpio_free(gpio_data_o);
-			return -1;
 		}
+		return -1;
 	}
 
-	if(gpio_ctl_i != 0){
-
-		if(gpio_data_i == 0){
-			printk("gpio irqsk: gpio_ctl_i should also set gpio_data_i\n");
-			if(gpio_ctl_o != 0){
-				gpio_free(gpio_ctl_o);
-				gpio_free(gpio_data_o);
-			}
-			return -1;
+	if(gpio_request(gpio_ctl_i, "gpio-ctl-i")) {
+		printk("gpio irqsk: can't allocate gpio_ctl_i: %d\n", gpio_ctl_i);
+		if(gpio_ctl_o != 0){
+			gpio_free(gpio_ctl_o);
+			gpio_free(gpio_data_o);
 		}
-
-		if(gpio_request(gpio_ctl_i, "gpio-ctl-i")) {
-			printk("gpio irqsk: can't allocate gpio_ctl_i: %d\n", gpio_ctl_i);
-			if(gpio_ctl_o != 0){
-				gpio_free(gpio_ctl_o);
-				gpio_free(gpio_data_o);
-			}
-			return -1;
-		}
-
-
-		if(gpio_direction_input(gpio_ctl_i)) {
-			printk("gpio irqsk: can't set gpio_ctl_i to input\n");
-			if(gpio_ctl_o != 0){
-				gpio_free(gpio_ctl_o);
-				gpio_free(gpio_data_o);
-			}
-			gpio_free(gpio_ctl_i);
-			return -1;
-		}
-
-		if(gpio_request(gpio_data_i, "gpio-data-i")) {
-			printk("gpio irqsk: can't allocate gpio_data_i: %d\n", gpio_data_i);
-			if(gpio_ctl_o != 0){
-				gpio_free(gpio_ctl_o);
-				gpio_free(gpio_data_o);
-			}
-			gpio_free(gpio_ctl_i);
-			return -1;
-		}
-
-
-		if(gpio_direction_input(gpio_data_i)) {
-			printk("gpio irqsk: can't set gpio_data_i to input\n");
-			if(gpio_ctl_o != 0){
-				gpio_free(gpio_ctl_o);
-				gpio_free(gpio_data_o);
-			}
-			gpio_free(gpio_ctl_i);
-			gpio_free(gpio_data_i);
-			return -1;
-		}
-
-
-		gpio_ctl_i_irq = gpio_to_irq(gpio_ctl_i);
-
-		if(request_irq(gpio_ctl_i_irq, gpio_ctl_irq_handler, IRQF_TRIGGER_RISING, "gpio_ctl_i_irq", NULL) != 0) {
-			printk("gpio irqsk: can't request interrupt\n");
-			if(gpio_ctl_o != 0){
-				gpio_free(gpio_ctl_o);
-				gpio_free(gpio_data_o);
-			}
-			gpio_free(gpio_ctl_i);
-			gpio_free(gpio_data_i);
-			return -1;
-		}
-
-		gpio_data_i_irq = gpio_to_irq(gpio_data_i);
-
-		if(request_irq(gpio_data_i_irq, gpio_data_irq_handler, IRQF_TRIGGER_RISING, "gpio_data_i_irq", NULL) != 0) {
-			printk("gpio irqsk: can't request interrupt\n");
-			if(gpio_ctl_o != 0){
-				gpio_free(gpio_ctl_o);
-				gpio_free(gpio_data_o);
-			}
-			gpio_free(gpio_ctl_i);
-			gpio_free(gpio_data_i);
-			free_irq(gpio_ctl_i_irq, NULL);
-			return -1;
-		}
-
-		printk("gpio irqsk: gpio_ctl_i to IRQ %d\n", gpio_ctl_i_irq);
-
-		printk("gpio irqsk: gpio_data_i to IRQ %d\n", gpio_data_i_irq);
+		return -1;
 	}
+
+
+	if(gpio_direction_input(gpio_ctl_i)) {
+		printk("gpio irqsk: can't set gpio_ctl_i to input\n");
+		if(gpio_ctl_o != 0){
+			gpio_free(gpio_ctl_o);
+			gpio_free(gpio_data_o);
+		}
+		gpio_free(gpio_ctl_i);
+		return -1;
+	}
+
+	if(gpio_request(gpio_data_i, "gpio-data-i")) {
+		printk("gpio irqsk: can't allocate gpio_data_i: %d\n", gpio_data_i);
+		if(gpio_ctl_o != 0){
+			gpio_free(gpio_ctl_o);
+			gpio_free(gpio_data_o);
+		}
+		gpio_free(gpio_ctl_i);
+		return -1;
+	}
+
+
+	if(gpio_direction_input(gpio_data_i)) {
+		printk("gpio irqsk: can't set gpio_data_i to input\n");
+		if(gpio_ctl_o != 0){
+			gpio_free(gpio_ctl_o);
+			gpio_free(gpio_data_o);
+		}
+		gpio_free(gpio_ctl_i);
+		gpio_free(gpio_data_i);
+		return -1;
+	}
+
+
+	gpio_ctl_i_irq = gpio_to_irq(gpio_ctl_i);
+
+	if(request_irq(gpio_ctl_i_irq, gpio_ctl_irq_handler, IRQF_TRIGGER_RISING, "gpio_ctl_i_irq", NULL) != 0) {
+		printk("gpio irqsk: can't request interrupt\n");
+		if(gpio_ctl_o != 0){
+			gpio_free(gpio_ctl_o);
+			gpio_free(gpio_data_o);
+		}
+		gpio_free(gpio_ctl_i);
+		gpio_free(gpio_data_i);
+		return -1;
+	}
+
+	gpio_data_i_irq = gpio_to_irq(gpio_data_i);
+
+	if(request_irq(gpio_data_i_irq, gpio_data_irq_handler, IRQF_TRIGGER_RISING, "gpio_data_i_irq", NULL) != 0) {
+		printk("gpio irqsk: can't request interrupt\n");
+		if(gpio_ctl_o != 0){
+			gpio_free(gpio_ctl_o);
+			gpio_free(gpio_data_o);
+		}
+		gpio_free(gpio_ctl_i);
+		gpio_free(gpio_data_i);
+		free_irq(gpio_ctl_i_irq, NULL);
+		return -1;
+	}
+
+	printk("gpio irqsk: gpio_ctl_i to IRQ %d\n", gpio_ctl_i_irq);
+
+	printk("gpio irqsk: gpio_data_i to IRQ %d\n", gpio_data_i_irq);
+
 
 	printk("gpio irqsk: module is initialized into the kernel\n");
 
 	printk("gpio irqsk: ctl_o: %d ctl_i: %d\n", gpio_ctl_o, gpio_ctl_i);
 	printk("gpio irqsk: data_o: %d data_i: %d\n", gpio_data_o, gpio_data_i);
 	
+	geth_interrupt = geth_napi_interrupt;
 
-	if(gpio_ctl_o != 0 && gpio_ctl_i == 0){
-
-		printk("gpio irqsk: test mode\n");
-
-		get_random_bytes(o_value, MAX_PKTLEN);
-
-		printk("value: %02x%02x%02x%02x...%02x%02x%02x%02x\n", 
-			o_value[0],
-			o_value[1],
-			o_value[2],
-			o_value[3],
-			o_value[MAX_PKTLEN-4],
-			o_value[MAX_PKTLEN-3],
-			o_value[MAX_PKTLEN-2],
-			o_value[MAX_PKTLEN-1]
-		);
-		INIT_WORK(&job, job_handler);
-
-		for(int i = 0; i < 10; i++){
-			schedule_work(&job);
-
-			wait_event_interruptible(this_wq, condition != 0);
-
-			condition = 0;
-		}
-
-		printk(KERN_INFO "job done\n");
-
-	}
-	if(gpio_ctl_o != 0 && gpio_ctl_i != 0){
-
-		printk("gpio irqsk: prod mode\n");
-
-		geth_interrupt = geth_napi_interrupt;
-
-		geth_devs = alloc_netdev(sizeof(struct geth_priv), "geth%d", NET_NAME_UNKNOWN, geth_setup);
-		if (!geth_devs){
-			printk("gpio irqsk: can't alloc netdev\n");
-			gpio_free(gpio_ctl_o);
-			gpio_free(gpio_data_o);
-			gpio_free(gpio_ctl_i);
-			gpio_free(gpio_data_i);
-			free_irq(gpio_ctl_i_irq, NULL);
-			free_irq(gpio_data_i_irq, NULL);
-			return -ENOMEM;
-		}
-
-		err = register_netdevice(geth_devs);
-		if (err < 0) {
-			printk("gpio irqsk: can't register netdev\n");
-			gpio_free(gpio_ctl_o);
-			gpio_free(gpio_data_o);
-			gpio_free(gpio_ctl_i);
-			gpio_free(gpio_data_i);
-			free_irq(gpio_ctl_i_irq, NULL);
-			free_irq(gpio_data_i_irq, NULL);
-			free_netdev(geth_devs);
-			return -1;
-		}
-
+	geth_devs = alloc_netdev(sizeof(struct geth_priv), "geth%d", NET_NAME_UNKNOWN, geth_setup);
+	if (!geth_devs){
+		printk("gpio irqsk: can't alloc netdev\n");
+		gpio_free(gpio_ctl_o);
+		gpio_free(gpio_data_o);
+		gpio_free(gpio_ctl_i);
+		gpio_free(gpio_data_i);
+		free_irq(gpio_ctl_i_irq, NULL);
+		free_irq(gpio_data_i_irq, NULL);
+		return -ENOMEM;
 	}
 
+	err = register_netdevice(geth_devs);
+	if (err < 0) {
+		printk("gpio irqsk: can't register netdev\n");
+		gpio_free(gpio_ctl_o);
+		gpio_free(gpio_data_o);
+		gpio_free(gpio_ctl_i);
+		gpio_free(gpio_data_i);
+		free_irq(gpio_ctl_i_irq, NULL);
+		free_irq(gpio_data_i_irq, NULL);
+		free_netdev(geth_devs);
+		return -1;
+	}
 
 	return 0;
 
