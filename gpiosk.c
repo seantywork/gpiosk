@@ -716,29 +716,23 @@ static int __init ksock_gpio_init(void) {
 
 	if(gpio_request(gpio_ctl_i, "gpio-ctl-i")) {
 		printk("gpiosk: can't allocate gpio_ctl_i: %d\n", gpio_ctl_i);
-		if(gpio_ctl_o != 0){
-			gpio_free(gpio_ctl_o);
-			gpio_free(gpio_data_o);
-		}
+		gpio_free(gpio_ctl_o);
+		gpio_free(gpio_data_o);
 		return -1;
 	}
 
 	if(gpio_direction_input(gpio_ctl_i)) {
 		printk("gpiosk: can't set gpio_ctl_i to input\n");
-		if(gpio_ctl_o != 0){
-			gpio_free(gpio_ctl_o);
-			gpio_free(gpio_data_o);
-		}
+		gpio_free(gpio_ctl_o);
+		gpio_free(gpio_data_o);
 		gpio_free(gpio_ctl_i);
 		return -1;
 	}
 
 	if(gpio_request(gpio_data_i, "gpio-data-i")) {
 		printk("gpiosk: can't allocate gpio_data_i: %d\n", gpio_data_i);
-		if(gpio_ctl_o != 0){
-			gpio_free(gpio_ctl_o);
-			gpio_free(gpio_data_o);
-		}
+		gpio_free(gpio_ctl_o);
+		gpio_free(gpio_data_o);
 		gpio_free(gpio_ctl_i);
 		return -1;
 	}
@@ -746,10 +740,8 @@ static int __init ksock_gpio_init(void) {
 
 	if(gpio_direction_input(gpio_data_i)) {
 		printk("gpiosk: can't set gpio_data_i to input\n");
-		if(gpio_ctl_o != 0){
-			gpio_free(gpio_ctl_o);
-			gpio_free(gpio_data_o);
-		}
+		gpio_free(gpio_ctl_o);
+		gpio_free(gpio_data_o);
 		gpio_free(gpio_ctl_i);
 		gpio_free(gpio_data_i);
 		return -1;
@@ -760,10 +752,8 @@ static int __init ksock_gpio_init(void) {
 
 	if(request_irq(gpio_ctl_i_irq, gpio_ctl_irq_handler, IRQF_TRIGGER_RISING, "gpio_ctl_i_irq", NULL) != 0) {
 		printk("gpiosk: can't request interrupt\n");
-		if(gpio_ctl_o != 0){
-			gpio_free(gpio_ctl_o);
-			gpio_free(gpio_data_o);
-		}
+		gpio_free(gpio_ctl_o);
+		gpio_free(gpio_data_o);
 		gpio_free(gpio_ctl_i);
 		gpio_free(gpio_data_i);
 		return -1;
@@ -773,10 +763,8 @@ static int __init ksock_gpio_init(void) {
 
 	if(request_irq(gpio_data_i_irq, gpio_data_irq_handler, IRQF_TRIGGER_RISING, "gpio_data_i_irq", NULL) != 0) {
 		printk("gpiosk: can't request interrupt\n");
-		if(gpio_ctl_o != 0){
-			gpio_free(gpio_ctl_o);
-			gpio_free(gpio_data_o);
-		}
+		gpio_free(gpio_ctl_o);
+		gpio_free(gpio_data_o);
 		gpio_free(gpio_ctl_i);
 		gpio_free(gpio_data_i);
 		free_irq(gpio_ctl_i_irq, NULL);

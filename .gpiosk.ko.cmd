@@ -1,1 +1,0 @@
-savedcmd_/home/seantywork/hack/gpiosk/gpiosk.ko := aarch64-linux-gnu-ld -r -EL  -maarch64elf -z noexecstack --no-warn-rwx-segments --build-id=sha1  -T arch/arm64/module.lds -o /home/seantywork/hack/gpiosk/gpiosk.ko /home/seantywork/hack/gpiosk/gpiosk.o /home/seantywork/hack/gpiosk/gpiosk.mod.o /home/seantywork/hack/gpiosk/.module-common.o

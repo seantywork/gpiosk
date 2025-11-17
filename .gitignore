@@ -21,3 +21,4 @@ modules.builtin
 *.lzo
 *.patch
 *.gcno
+*.cmd
