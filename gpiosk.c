@@ -12,6 +12,8 @@ int pool_size = 8;
 
 void (*geth_interrupt)(int, void *, struct pt_regs *);
 
+int gpio_ready = 0;
+
 int gpio_ctl_o = -1;
 int gpio_ctl_i = -1;
 int gpio_data_o = -1;
@@ -662,56 +664,67 @@ irqreturn_t gpio_data_irq_handler(int irq, void *dev_id) {
 	return IRQ_HANDLED;
 }
 
+static int _gpio_get_line(struct gpio_chip *gc, const void *data){
+	if(gpio_ready){
+		return 0;
+	}
+    if(gc->label != NULL){
+        if(strcmp(gc->label, PINCTRL_BCM2711) == 0){
+			printk("gpiosk: chip detected: label: %s base: %d num: %d\n", gc->label, gc->base, gc->ngpio);
+			gpio_ctl_o = gc->base + PIN_CTL_OUT;
+			gpio_ctl_i = gc->base + PIN_CTL_IN;
+			gpio_data_o = gc->base + PIN_DATA_OUT;
+			gpio_data_i = gc->base + PIN_DATA_IN;
+			gpio_ready = 1;
+        }
+    } 
+    return 0;
+}
 
 static int __init ksock_gpio_init(void) {
 
 	int err;
 
+	gpio_device_find(NULL, _gpio_get_line);
+	if(!gpio_ready){
+		printk("gpiosk: available gpio chip is not found\n");
+		return -1;
+	}
 	if(gpio_request(gpio_ctl_o, "gpio-ctl-o")) {
-		printk("gpio irqsk: can't allocate gpio_ctl_o: %d\n", gpio_ctl_o);
+		printk("gpiosk: can't allocate gpio_ctl_o: %d\n", gpio_ctl_o);
 		return -1;
 	}		
 
 	if(gpio_direction_output(gpio_ctl_o, IRQF_TRIGGER_NONE)) {
-		printk("gpio irqsk: can't set gpio_ctl_o to output\n");
+		printk("gpiosk: can't set gpio_ctl_o to output\n");
 		gpio_free(gpio_ctl_o);
 		return -1;
 	}
 
 	if(gpio_request(gpio_data_o, "gpio-data-o")) {
-		printk("gpio irqsk: can't allocate gpio_data_o: %d\n", gpio_data_o);
+		printk("gpiosk: can't allocate gpio_data_o: %d\n", gpio_data_o);
 		gpio_free(gpio_ctl_o);
 		return -1;
 	}		
 
 	if(gpio_direction_output(gpio_data_o, IRQF_TRIGGER_NONE)) {
-		printk("gpio irqsk: can't set gpio_data_o to output\n");
+		printk("gpiosk: can't set gpio_data_o to output\n");
 		gpio_free(gpio_ctl_o);
 		gpio_free(gpio_data_o);
 		return -1;
 	}
 
-	if(gpio_data_i == 0){
-		printk("gpio irqsk: gpio_ctl_i should also set gpio_data_i\n");
-		if(gpio_ctl_o != 0){
-			gpio_free(gpio_ctl_o);
-			gpio_free(gpio_data_o);
-		}
-		return -1;
-	}
-
 	if(gpio_request(gpio_ctl_i, "gpio-ctl-i")) {
-		printk("gpio irqsk: can't allocate gpio_ctl_i: %d\n", gpio_ctl_i);
+		printk("gpiosk: can't allocate gpio_ctl_i: %d\n", gpio_ctl_i);
 		if(gpio_ctl_o != 0){
 			gpio_free(gpio_ctl_o);
 			gpio_free(gpio_data_o);
 		}
 		return -1;
 	}
-
 
 	if(gpio_direction_input(gpio_ctl_i)) {
-		printk("gpio irqsk: can't set gpio_ctl_i to input\n");
+		printk("gpiosk: can't set gpio_ctl_i to input\n");
 		if(gpio_ctl_o != 0){
 			gpio_free(gpio_ctl_o);
 			gpio_free(gpio_data_o);
@@ -721,7 +734,7 @@ static int __init ksock_gpio_init(void) {
 	}
 
 	if(gpio_request(gpio_data_i, "gpio-data-i")) {
-		printk("gpio irqsk: can't allocate gpio_data_i: %d\n", gpio_data_i);
+		printk("gpiosk: can't allocate gpio_data_i: %d\n", gpio_data_i);
 		if(gpio_ctl_o != 0){
 			gpio_free(gpio_ctl_o);
 			gpio_free(gpio_data_o);
@@ -732,7 +745,7 @@ static int __init ksock_gpio_init(void) {
 
 
 	if(gpio_direction_input(gpio_data_i)) {
-		printk("gpio irqsk: can't set gpio_data_i to input\n");
+		printk("gpiosk: can't set gpio_data_i to input\n");
 		if(gpio_ctl_o != 0){
 			gpio_free(gpio_ctl_o);
 			gpio_free(gpio_data_o);
@@ -746,7 +759,7 @@ static int __init ksock_gpio_init(void) {
 	gpio_ctl_i_irq = gpio_to_irq(gpio_ctl_i);
 
 	if(request_irq(gpio_ctl_i_irq, gpio_ctl_irq_handler, IRQF_TRIGGER_RISING, "gpio_ctl_i_irq", NULL) != 0) {
-		printk("gpio irqsk: can't request interrupt\n");
+		printk("gpiosk: can't request interrupt\n");
 		if(gpio_ctl_o != 0){
 			gpio_free(gpio_ctl_o);
 			gpio_free(gpio_data_o);
@@ -759,7 +772,7 @@ static int __init ksock_gpio_init(void) {
 	gpio_data_i_irq = gpio_to_irq(gpio_data_i);
 
 	if(request_irq(gpio_data_i_irq, gpio_data_irq_handler, IRQF_TRIGGER_RISING, "gpio_data_i_irq", NULL) != 0) {
-		printk("gpio irqsk: can't request interrupt\n");
+		printk("gpiosk: can't request interrupt\n");
 		if(gpio_ctl_o != 0){
 			gpio_free(gpio_ctl_o);
 			gpio_free(gpio_data_o);
@@ -770,21 +783,20 @@ static int __init ksock_gpio_init(void) {
 		return -1;
 	}
 
-	printk("gpio irqsk: gpio_ctl_i to IRQ %d\n", gpio_ctl_i_irq);
+	printk("gpiosk: gpio_ctl_i to IRQ %d\n", gpio_ctl_i_irq);
 
-	printk("gpio irqsk: gpio_data_i to IRQ %d\n", gpio_data_i_irq);
+	printk("gpiosk: gpio_data_i to IRQ %d\n", gpio_data_i_irq);
 
+	printk("gpiosk: module is initialized into the kernel\n");
 
-	printk("gpio irqsk: module is initialized into the kernel\n");
-
-	printk("gpio irqsk: ctl_o: %d ctl_i: %d\n", gpio_ctl_o, gpio_ctl_i);
-	printk("gpio irqsk: data_o: %d data_i: %d\n", gpio_data_o, gpio_data_i);
+	printk("gpiosk: ctl_o: %d ctl_i: %d\n", gpio_ctl_o, gpio_ctl_i);
+	printk("gpiosk: data_o: %d data_i: %d\n", gpio_data_o, gpio_data_i);
 	
 	geth_interrupt = geth_napi_interrupt;
 
 	geth_devs = alloc_netdev(sizeof(struct geth_priv), "geth%d", NET_NAME_UNKNOWN, geth_setup);
 	if (!geth_devs){
-		printk("gpio irqsk: can't alloc netdev\n");
+		printk("gpiosk: can't alloc netdev\n");
 		gpio_free(gpio_ctl_o);
 		gpio_free(gpio_data_o);
 		gpio_free(gpio_ctl_i);
@@ -796,7 +808,7 @@ static int __init ksock_gpio_init(void) {
 
 	err = register_netdevice(geth_devs);
 	if (err < 0) {
-		printk("gpio irqsk: can't register netdev\n");
+		printk("gpiosk: can't register netdev\n");
 		gpio_free(gpio_ctl_o);
 		gpio_free(gpio_data_o);
 		gpio_free(gpio_ctl_i);
@@ -814,25 +826,18 @@ static int __init ksock_gpio_init(void) {
 static void __exit ksock_gpio_exit(void) {
 
 
-	if(gpio_ctl_o != 0){
+	gpio_free(gpio_ctl_o);
+	gpio_free(gpio_data_o);
 
-		gpio_free(gpio_ctl_o);
-		gpio_free(gpio_data_o);
-	}
-	if(gpio_ctl_i != 0){
-		gpio_free(gpio_ctl_i);
-		gpio_free(gpio_data_i);
-		free_irq(gpio_ctl_i_irq, NULL);
-		free_irq(gpio_data_i_irq, NULL);
-	}
+	gpio_free(gpio_ctl_i);
+	gpio_free(gpio_data_i);
+	free_irq(gpio_ctl_i_irq, NULL);
+	free_irq(gpio_data_i_irq, NULL);
 
-	if(gpio_ctl_i != 0 && gpio_ctl_o != 0){
+	unregister_netdev(geth_devs);
+	free_netdev(geth_devs);
 
-		unregister_netdev(geth_devs);
-		free_netdev(geth_devs);
-	}
-
-	printk("gpio irqsk: module is removed from the kernel\n");
+	printk("gpiosk: module is removed from the kernel\n");
 }
 
 module_init(ksock_gpio_init);
