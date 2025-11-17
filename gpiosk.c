@@ -302,7 +302,7 @@ int geth_open(struct net_device *dev){
 
 	char macaddr[ETH_ALEN] = {0};
 
-	int val = gpio_data_i - gpio_ctl_i;
+	int val = 1;
 
 	printk(KERN_INFO "geth mac val: %d\n", val);
 
