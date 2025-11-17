@@ -22,3 +22,5 @@ modules.builtin
 *.patch
 *.gcno
 *.cmd
+*.symvers
+*.mod
