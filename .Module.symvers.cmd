@@ -1,1 +1,0 @@
-savedcmd_/home/seantywork/hack/gpiosk/Module.symvers :=  scripts/mod/modpost -M -m -a      -o /home/seantywork/hack/gpiosk/Module.symvers -T /home/seantywork/hack/gpiosk/modules.order -i Module.symvers -e 
