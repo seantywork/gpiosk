@@ -4,6 +4,12 @@ GPIO based Linux netdevice kernel module
 
 ![thumbnail](docs/blueprint.jpg)
 
+- [what is this?](#what-is-this)
+- [specification](#specification)
+- [documentation](#documentation)
+- [how to](#how-to)
+- [xdp feature](#xdp-feature)
+
 # what is this?
 
 This kernel module is no different from a plain old Linux networking interface...\
@@ -55,7 +61,71 @@ bye
 
 ```
 
-# xdp native
+# specification
+
+So far, I only tested it on my raspberry pi 4b with spec below
+
+```shell
+# lscpu
+Architecture:             aarch64
+  CPU op-mode(s):         32-bit, 64-bit
+  Byte Order:             Little Endian
+CPU(s):                   4
+  On-line CPU(s) list:    0-3
+Vendor ID:                ARM
+  Model name:             Cortex-A72
+    Model:                3
+    Thread(s) per core:   1
+    Core(s) per cluster:  4
+    Socket(s):            -
+    Cluster(s):           1
+    Stepping:             r0p3
+    CPU(s) scaling MHz:   33%
+    CPU max MHz:          1800.0000
+    CPU min MHz:          600.0000
+    BogoMIPS:             108.00
+    Flags:                fp asimd evtstrm crc32 cpuid
+```
+
+```shell
+# uname -a
+Linux raspberrypi 6.12.25+rpt-rpi-v8 #1 SMP PREEMPT Debian 1:6.12.25-1+rpt1 (2025-04-30) aarch64 GNU/Linux
+```
+# documentation
+
+Refer to the following [how to](#how-to) section
+
+~~- [version 1.0](https://medium.com/@seantywork/gpiosk-introducing-my-gpio-based-linux-socket-kernel-module-bba2d114236e)~~
+
+# how to
+
+1. physical wiring
+
+- blueprint
+
+![blueprint](docs/blueprint.jpg)
+
+- actual
+
+![actual](docs/actual.jpg)
+
+2. build
+
+```shell
+make
+```
+
+3. insmod
+
+```shell
+# hwid should be an interger ranging from 1 to 9
+# and should be set differently for each host
+# because `gpiosk` module uses it to set hw addr 
+sudo insmod gpiosk.ko hwid=$HWID
+```
+
+
+# xdp feature
 
 
 ### install xdp-tools
@@ -164,68 +234,3 @@ $ nc 10.10.0.1 9999
 $ sudo xdp-loader unload geth0 -a
 
 ```
-
-# specification
-
-So far, I only tested it on my raspberry pi 4b with spec below
-
-```shell
-# lscpu
-Architecture:             aarch64
-  CPU op-mode(s):         32-bit, 64-bit
-  Byte Order:             Little Endian
-CPU(s):                   4
-  On-line CPU(s) list:    0-3
-Vendor ID:                ARM
-  Model name:             Cortex-A72
-    Model:                3
-    Thread(s) per core:   1
-    Core(s) per cluster:  4
-    Socket(s):            -
-    Cluster(s):           1
-    Stepping:             r0p3
-    CPU(s) scaling MHz:   33%
-    CPU max MHz:          1800.0000
-    CPU min MHz:          600.0000
-    BogoMIPS:             108.00
-    Flags:                fp asimd evtstrm crc32 cpuid
-```
-
-```shell
-# uname -a
-Linux raspberrypi 6.12.25+rpt-rpi-v8 #1 SMP PREEMPT Debian 1:6.12.25-1+rpt1 (2025-04-30) aarch64 GNU/Linux
-```
-# documentation
-
-- [version 1.0](https://medium.com/@seantywork/gpiosk-introducing-my-gpio-based-linux-socket-kernel-module-bba2d114236e)
-
-# how to
-
-1. physical wiring
-
-- blueprint
-
-![blueprint](docs/blueprint.jpg)
-
-- actual
-
-![actual](docs/actual.jpg)
-
-2. build
-
-```shell
-make
-```
-
-3. configure
-
-```shell
-# check ins.conf.tmpl
-```
-
-4. insmod
-
-```shell
-sudo ./ins.sh
-```
-
