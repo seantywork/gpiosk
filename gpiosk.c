@@ -19,6 +19,9 @@ int gpio_ctl_i = -1;
 int gpio_data_o = -1;
 int gpio_data_i = -1;
 
+int hwid = -1;
+module_param(hwid, int, 0644);
+
 unsigned int gpio_ctl_i_irq;
 unsigned int gpio_data_i_irq;
 
@@ -302,11 +305,9 @@ int geth_open(struct net_device *dev){
 
 	char macaddr[ETH_ALEN] = {0};
 
-	int val = 1;
+	printk(KERN_INFO "geth mac val: %d\n", hwid);
 
-	printk(KERN_INFO "geth mac val: %d\n", val);
-
-	sprintf(macaddr, "GETH0%d", val);
+	sprintf(macaddr, "GETH0%d", hwid);
 
 	memcpy((void*)dev->dev_addr, macaddr, ETH_ALEN);
 
@@ -684,6 +685,11 @@ static int _gpio_get_line(struct gpio_chip *gc, const void *data){
 static int __init ksock_gpio_init(void) {
 
 	int err;
+
+	if(hwid < 1 || hwid > 9){
+		printk("gpiosk: invalid hwid: %d\n", hwid);
+		return -1;
+	}
 
 	gpio_device_find(NULL, _gpio_get_line);
 	if(!gpio_ready){
